@@ -1,0 +1,10 @@
+# Core vision & array operations
+numpy>=1.26
+opencv-contrib-python>=4.8
+
+# Notebook & interactivity
+jupyterlab>=4.0
+ipykernel>=6.22
+
+# Plotting (if you use matplotlib in analysis)
+matplotlib>=3.7

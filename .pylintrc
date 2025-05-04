@@ -1,0 +1,16 @@
+[MASTER]
+disable=missing-docstring, invalid-name
+extension-pkg-whitelist=cv2 # cv2 is a C-extension
+
+[FORMAT]
+max-line-length=100
+
+[MESSAGES CONTROL]
+enable=all
+
+[DESIGN]
+max-args=5
+
+[TYPECHECK]
+ignored-modules=pyink
+generated-members=cv.*,cv2.* # exception for OpenCV

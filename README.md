@@ -66,6 +66,7 @@ This repository contains all configuration and notebook resources needed to repr
    ```bash
    pip install --upgrade pip
    pip install -r requirements.txt
+   # (in your activated venv)
    ```
 5. Register the Jupyter kernel:
    ```bash
@@ -82,6 +83,8 @@ This repository contains all configuration and notebook resources needed to repr
 2. Open `notebooks/main.ipynb`  
 3. Select **PiCar .venv (Python 3.x)** as the kernel  
 4. Run through the cells to capture frames, preprocess, and explore computer-vision methods.
+> **Notebook Note:**  
+> We use `ipywidgets` sliders in `notebooks/main.ipynb` to interactively tune HSV thresholds.
 
 ---
 

@@ -12,43 +12,55 @@ from robot_hat.utils import reset_mcu
 # ──────────────────────────────────────────────────────────────────────────────
 # CONFIGURATION
 # ──────────────────────────────────────────────────────────────────────────────
-LOWER_BLUE   = np.array([90, 0, 0])
-UPPER_BLUE   = np.array([180, 255, 255])
-SERVO_MAX    = 30    # servo clip in degrees
-DEFAULT_TILT = -15
-MIN_CONTOUR_AREA    = 1_000   # pixels
-DIRECTION_THRESHOLD = 5       # px
-SEARCH_STEP         = 10      # degrees
-CAMERA_SETTLE_TIME   = 0.01    # seconds
-FRAME_RESOLUTION      = (640, 480)  # pixels
 
-# PID gains
-Kp, Ki, Kd = 0.6, 0.05, 0.2
+# Tunables
+Kp, Ki, Kd = 0.6, 0.05, 0.2  # PID gains
+LOWER_BLUE = np.array([90, 0, 0])  # lower bound of blue in HSV
+UPPER_BLUE = np.array([180, 255, 255])  # upper bound of blue in HSV
+MAX_PULSE = 0.20  # maximum “straight” burst duration (s)
+MIN_PULSE = 0.01  # minimum burst duration at max error
+CAMERA_SETTLE_TIME = 0.01  # seconds, FIXME: impacts driving speed
+
+# Defaults
+SERVO_MAX = 30  # picar servo clip in degrees
+DEFAULT_CAM_TILT = -15  # camera servo tilt angle in degrees
+MIN_CONTOUR_AREA = 1_000  # pixels
+DIRECTION_THRESHOLD = 5  # px
+SEARCH_STEP = 10  # degrees
+NATIVE_RESOLUTION = (3280, 2464)  # pixels
+FRAME_RESOLUTION = (640, 480)  # pixels
+FRAME_HALF = FRAME_RESOLUTION[0] // 2  # half the frame width
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # UTILS
 # ──────────────────────────────────────────────────────────────────────────────
 def grab_bgr_frame():
     """Return a BGR frame from the camera."""
-    picam2.set_controls({"AwbMode":0,})
+    picam2.set_controls(
+        {
+            "AwbMode": 0,
+        }
+    )
     # trigger an autofocus, then grab & convert to BGR
     picam2.set_controls({"AfMode": 2})
     time.sleep(CAMERA_SETTLE_TIME)  # let the camera converge
     rgb = picam2.capture_array()
     return cv.cvtColor(rgb, cv.COLOR_RGB2BGR)
 
+
 def detect_road_contour(input_frame):
     """Return (largest_contour, center_x, center_y) or (None, None, None)."""
     mask = cv.resize(input_frame, FRAME_RESOLUTION)
-    mask   = cv.cvtColor(mask, cv.COLOR_BGR2HSV)
-    mask  = cv.inRange(mask, LOWER_BLUE, UPPER_BLUE)
+    mask = cv.cvtColor(mask, cv.COLOR_BGR2HSV)
+    mask = cv.inRange(mask, LOWER_BLUE, UPPER_BLUE)
 
     h, _ = mask.shape
 
     # bottom 30% of the frame, but *stop* 10% short of the absolute bottom
-    top    = int(h * 0.50)
+    top = int(h * 0.50)
     bottom = int(h * 0.90)
-    roi    = mask[top:bottom, :]
+    roi = mask[top:bottom, :]
 
     ox, oy = 0, top
 
@@ -62,110 +74,114 @@ def detect_road_contour(input_frame):
         return None, None, None
 
     # shift coords back to full frame
-    c[:,0,0] += ox
-    c[:,0,1] += oy
+    c[:, 0, 0] += ox
+    c[:, 0, 1] += oy
 
     M = cv.moments(c)
     if not M["m00"]:
         return None, None, None
 
-    cx = int(M["m10"]/M["m00"])
-    cy = int(M["m01"]/M["m00"])
+    cx = int(M["m10"] / M["m00"])
+    cy = int(M["m01"] / M["m00"])
     return c, cx, cy
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # INIT
 # ──────────────────────────────────────────────────────────────────────────────
-reset_mcu()
-px = Picarx()
-px.set_cam_tilt_angle(DEFAULT_TILT)
+reset_mcu()  # reset the MCU to clear any previous state
+px = Picarx()  # create the car object
+px.set_cam_tilt_angle(DEFAULT_CAM_TILT)  # set the camera tilt angle
 
-# startup sound
-music = Music()
-music.music_set_volume(30)
-music.sound_play_threading('./sounds/car-start-engine.wav')
-time.sleep(1) # wait for sound to finish
+# Startup the sound system
+music = Music()  # create the music object
+music.music_set_volume(30)  # set the volume to 30%
+music.sound_play_threading("./sounds/car-start-engine.wav")  # vroom!
 
-# camera setup
-picam2 = Picamera2()
-cfg = picam2.create_still_configuration(main={"size": (3280, 2464)})
-picam2.configure(cfg)
-picam2.start()
-
-###
-picam2.set_controls({"AfMode": 2})
+# Camera setup
+picam2 = Picamera2()  # create the camera object
+cfg = picam2.create_still_configuration(main={"size": NATIVE_RESOLUTION})
+picam2.configure(cfg)  # configure the camera
+picam2.start()  # start the camera
+picam2.set_controls(
+    {
+        "AfMode": 2,  # 2 = continuous
+        "AwbEnable": 1,  # 1 = on
+        "AwbMode": 1,  # Auto
+        "AeConstraintMode": 1,  # 0 = auto
+        "AeExposureMode": 2,  # 0 = auto
+        "AnalogueGainMode": 0,  # 1 = manual gain
+        "AnalogueGain": 2.0,  # double the signal
+        "Brightness": 0.3,  # 0 = no brightness
+        "Contrast": 1.5,  # 0 = no contrast
+        "HdrMode": 2,  # 0 = Off, 1 = SingleExposure, 2 = MultiExposure, 3 = Night
+        "NoiseReductionMode": 2,  # 0 = off
+        "Saturation": 2.0,  # 0 = no saturation
+        "Sharpness": 1.0,  # 0 = no sharpness
+    }
+)
 time.sleep(CAMERA_SETTLE_TIME)  # let the camera converge
 
-picam2.set_controls({
-    "AfMode": 2,       # 2 = continuous
-    "AwbEnable":          1,       # 1 = on
-    "AwbMode":            1,       # Auto
-    "AeConstraintMode":    1,       # 0 = auto
-    "AeExposureMode":       2,       # 0 = auto
-    "AnalogueGainMode":   0,       # 1 = manual gain
-    "AnalogueGain":       2.0,     # double the signal
-    "Brightness":         0.3,       # 0 = no brightness
-    "Contrast":           1.5,       # 0 = no contrast
-    "HdrMode":           2,       # 0 = Off, 1 = SingleExposure, 2 = MultiExposure, 3 = Night
-    "NoiseReductionMode": 2,       # 0 = off
-    "Saturation":         2.0,     # 0 = no saturation
-    "Sharpness":          1.0,     # 0 = no sharpness
-})
-###
-
+# Text-to-speech setup for announcements
 tts = TTS()
 
 # ──────────────────────────────────────────────────────────────────────────────
 # MAIN LOOP
 # ──────────────────────────────────────────────────────────────────────────────
-# PID state
-prev_err = 0
-integral = 0
-last_dir = 0   # +1 = right, -1 = left
-last_last_dir = 0
-found_road = False
 
+# PID state
+prev_err = 0  # previous error
+integral = 0  # integral error
+
+# Last known direction
+last_dir = 0  # +1 = right, -1 = left
+last_last_dir = 0  # +1 = right, -1 = left
+
+# Lost car state
+found_road = False  # road found?
 lost_timer = time.time()
 hopelessly_lost = False
 
 try:
     while not hopelessly_lost:
-        frame, cX, cY = grab_bgr_frame(), None, None
-        cnt, cX, cY = detect_road_contour(frame)
+        frame, cX, cY = grab_bgr_frame(), None, None  # grab a frame
+        cnt, cX, cY = detect_road_contour(frame)  # detect the road contour
 
-        if cnt is not None:
+        if cnt is not None:  # road detected
             # reset lost clock
             lost_timer = time.time()
 
-            # compute lateral error
-            error = cX - 320
-            integral += error
-            # clamp integral to avoid windup
-            integral = np.clip(integral, -SERVO_MAX, SERVO_MAX)
-            derivative = error - prev_err
+            # PID control
+            error = cX - FRAME_RESOLUTION[0] // 2  # compute lateral error
+            integral += error  # accumulate error
+            integral = np.clip(
+                integral, -SERVO_MAX, SERVO_MAX
+            )  # clamp integral to avoid windup
+            derivative = error - prev_err  # compute derivative
 
-            raw_ang = Kp*error + Ki*integral + Kd*derivative
+            raw_ang = (
+                Kp * error + Ki * integral + Kd * derivative
+            )  # compute raw steering angle
+
             # deadband
             if abs(raw_ang) < DIRECTION_THRESHOLD:
                 raw_ang = 0
+
             # keep track of sign if within small dead-zone
             if abs(error) > DIRECTION_THRESHOLD:
                 last_last_dir = last_dir
                 last_dir = np.sign(error)
 
             # round & clip
-            ang = round(raw_ang/2)*2
+            ang = round(raw_ang / 2) * 2
             ang = np.clip(ang, -SERVO_MAX, SERVO_MAX)
             prev_err = error
 
             # steer & tiny forward burst
             px.set_dir_servo_angle(int(ang))
-            print(f"[DRIVE] err={error:+.0f}  → PID={raw_ang:.1f}°  → steer={ang:+.0f}°")
-
-            # pulse‐length mapping (longer when error small, very short when error large)
-            MAX_PULSE = 0.20   # maximum “straight” burst duration (s)
-            MIN_PULSE = 0.01   # minimum burst duration at max error
-            FRAME_HALF = FRAME_RESOLUTION[0]//2  # half the frame width
+            print(
+                f"[DRIVE] err={error:+.0f}  → PID={raw_ang:.1f}°  → steer={ang:+.0f}°"
+            )
 
             # normalize error into [0…1]
             norm = min(abs(error) / FRAME_HALF, 1.0)
@@ -176,73 +192,73 @@ try:
             print(f"norm={norm:.2f}  pulse={pulse:.2f} s")
 
             # drive forward for that pulse
-            px.forward(0.1)      # or whatever your base speed is
+            px.forward(0.1)  # or whatever your base speed is
             time.sleep(pulse)
             px.stop()
 
         else:
             # no contour found → sweep outwards from last known direction
-            px.stop()
-            found_road = False
+            px.stop()  # stop the motors
+            found_road = False  # reset the found road flag
 
             # Tilt scan: first look slightly down, then center
-            for tilt_angle in range(-SERVO_MAX, DEFAULT_TILT + 1, 15):
+            for tilt_angle in range(-SERVO_MAX, DEFAULT_CAM_TILT + 1, 15):
                 px.set_cam_tilt_angle(tilt_angle)
 
-                # Build a “radial” list of pan offsets: 0, +5, –5, +10, –10, … up to SERVO_MAX
+                # Build a “radial” list of pan offsets #FIXME: wonky
                 offsets = [0]
                 for d in range(15, SERVO_MAX + 1, 15):
                     offsets += [d, -d]
 
-                # Center those offsets around last_pan (defaults to 0°)
-                center = locals().get('last_pan', 0)
+                # Center offsets around last_pan (defaults to 0°)
+                center = locals().get("last_pan", 0)
                 for off in offsets:
                     pan = int(np.clip(center + off, -SERVO_MAX, SERVO_MAX))
                     px.set_cam_pan_angle(pan)
-                    time.sleep(0.01)  # give camera exposure a moment
+                    time.sleep(CAMERA_SETTLE_TIME)  # let the camera settle
 
-                    f, x, y = detect_road_contour(grab_bgr_frame())
+                    f, x, y = detect_road_contour(grab_bgr_frame())  # grab a frame
                     if f is not None:
                         # Found the road!
-                        integral = 0         # reset PID integrator
-                        previous_error = 0
-                        steering_angle = pan
-                        found_road = True
-                        last_pan = pan      # remember for next time
-                        break
+                        integral = 0  # reset PID integrator
+                        previous_error = 0  # reset previous error
+                        steering_angle = pan  # steer towards the road the camera sees
+                        found_road = True  # set the found road flag
+                        last_pan = pan  # remember for next time
+                        break  # out of the pan loop
                 if found_road:
-                    break
+                    break  # out of the tilt loop
 
             if found_road:
-                # Try backing up a bit
+                # Try backing up a bit to get a better view
                 steer = -last_last_dir * SERVO_MAX
                 px.set_dir_servo_angle(steer)
-                px.backward(0.1)        # back up just a bit
-                time.sleep(0.6)
-                px.stop()
+                px.backward(0.1)  # back up just a bit
+                time.sleep(MAX_PULSE * 3)  # 0.6 seconds
+                px.stop()  # stop the motors
                 px.set_dir_servo_angle(0)  # straighten wheels
-                continue
+                continue  # continue to the main loop
 
             # still no road → try a little reverse-pulse in the opposite steer
             if last_last_dir:
                 # full opposite steer
                 steer = -last_last_dir * SERVO_MAX
                 px.set_dir_servo_angle(steer)
-                px.backward(0.1)        # back up just a bit
-                time.sleep(0.6)
-                px.stop()
+                px.backward(0.1)  # back up just a bit
+                time.sleep(MAX_PULSE * 3)  # 0.6 seconds
+                px.stop()  # stop the motors
                 px.set_dir_servo_angle(0)  # straighten wheels
                 # reset your lost timer so you don’t immediately re-enter this
                 lost_timer = time.time()
                 continue
 
-            # If still lost after 10 s, give up
+            # If still lost after 10 seconds, give up
             if time.time() - lost_timer > 10:
-                music.sound_play_threading('./sounds/car-double-horn.wav')
+                music.sound_play_threading("./sounds/car-double-horn.wav")
                 tts.say("I am hopelessly lost. Please place me back on the road.")
                 hopelessly_lost = True
 
-        time.sleep(0.01)
+        time.sleep(CAMERA_SETTLE_TIME)  # FIXME: decouple from CAMERA_SETTLE_TIME
 
 except KeyboardInterrupt:
     print("Shutting down…")

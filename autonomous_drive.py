@@ -1,5 +1,16 @@
 #!/usr/bin/env python3
 # autonomous_drive.py
+# Author: Charles Stevenson
+# Email:  csteve17@student.fitchburgstate.edu
+# Project: PiCar-X OpenCV Autonomous Lane-Following
+#
+# Description:
+#   Continuously captures frames from the PiCamera2, detects a “road” marked
+#   by blue painter’s tape (using HSV thresholding and contour extraction),
+#   computes steering angles via a PID controller, and issues drive commands
+#   to the PiCar-X. Includes fallback search behavior when the tape is lost
+#   and audio alerts (engine start, horn, TTS).
+
 
 import time
 import cv2 as cv

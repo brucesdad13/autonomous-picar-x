@@ -23,12 +23,13 @@ from robot_hat.utils import reset_mcu
 # Note: the values are in HSV color space (values may
 # need to be adjusted based on lighting conditions or
 # add an LED light source to the camera)
-LOWER_BLUE = np.array([100, 150, 50])
-UPPER_BLUE = np.array([140, 255, 255])
+LOWER_BLUE = np.array([90, 150, 50])
+UPPER_BLUE = np.array([180, 255, 255])
 SERVO_MAX = 30  # Max servo angle for camera pan/tilt
         
 # Utility: grab a frame and convert to proper BGR for OpenCV
 def grab_bgr_frame():
+    picam2.set_controls({"AfMode": 2})  # Trigger autofocus once
     rgb = picam2.capture_array()              # RGB
     bgr = cv.cvtColor(rgb, cv.COLOR_RGB2BGR)  # → BGR
     return bgr
@@ -47,11 +48,11 @@ def detect_road_contour(frame):
 
     # Define region of interest (ROI) as bottom quarter, middle half
     height, width = mask.shape
-    roi = mask[int(height * 0.75):, int(width * 0.25):int(width * 0.75)]
+    roi = mask[int(height * 0.7):, :]
 
     # Shift contour coordinates to match full frame
-    offset_x = int(width * 0.25)
-    offset_y = int(height * 0.75)
+    offset_x = 0 #int(width * 0.25)
+    offset_y = int(height * 0.7)
 
     contours, _ = cv.findContours(roi, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
     if not contours:
@@ -108,39 +109,54 @@ lost_timer = time.time()
 hopelessly_lost = False
 try:
     while not hopelessly_lost:
-        frame = grab_bgr_frame()  # Grab a frame from the camera
+        frame = cv.resize(grab_bgr_frame(), (640,480))  # Grab a frame from the camera
         largest, cX, cY = detect_road_contour(frame)  # Detect road contour
+        print(f"cX: {cX}, cY: {cY}")
 
         if largest is not None:
             # Reset lost timer
             lost_timer = time.time()
 
-            delta_x = cX - (frame.shape[1] // 2)
-            delta_y = frame.shape[0] - cY
+            delta_x = cX - (640 // 2)
+            delta_y = max(80, 480 - cY)
 
-            angle_rad = np.arctan2(delta_x, delta_y)
-            steering_angle = np.clip(np.degrees(angle_rad), -SERVO_MAX, SERVO_MAX)
+            steering_angle_rad = np.arctan2(delta_x, delta_y)  # Calculate steering angle in radians
+            steering_angle_deg = np.degrees(steering_angle_rad)
+            steering_angle = round(steering_angle_deg / 2) * 2  # Round to nearest 5 degrees
+            steering_angle = np.clip(steering_angle, -SERVO_MAX, SERVO_MAX)
             px.set_dir_servo_angle(steering_angle)
+            print(f"delta_x: {delta_x}, delta_y: {delta_y}, angle in radians: {steering_angle_rad:.2f}, angle in degrees: {steering_angle_deg:.2f}")
+            print(f"Steering angle: {steering_angle:.2f} degrees")
             px.forward(1)
+            time.sleep(0.1)  # Tune this (0.1–0.25)
+            px.stop()
         else:
             px.stop()
-            search_angles = [-SERVO_MAX, 0, SERVO_MAX]
+            cam_pan_angles = [-SERVO_MAX, SERVO_MAX]
+            cam_tilt_angles = [-SERVO_MAX, 0] # the road is not above the car ;)
+            # Search for road by panning camera
             found_road = False
             
-            for angle in search_angles:
-                px.set_cam_pan_angle(angle)
-                time.sleep(0.5)
-                frame = grab_bgr_frame()
-                largest, cX, cY = detect_road_contour(frame)
-                if largest is not None:
-                    px.set_cam_pan_angle(0)  # Center camera
-                    found_road = True
-                    px.set_dir_servo_angle(angle)
-                    px.forward(1)
+            for tilt_angle in range(cam_tilt_angles[0], cam_tilt_angles[1], 10):
+                px.set_cam_tilt_angle(tilt_angle) # look up/down
+                for steering_angle in range(cam_pan_angles[0], cam_pan_angles[1], 10):
+                    px.set_cam_pan_angle(steering_angle)
+                    time.sleep(0.5)
+                    frame = grab_bgr_frame()
+                    largest, cX, cY = detect_road_contour(frame)
+                    if largest is not None:
+                        found_road = True
+                        break
+                if found_road:
                     break
             
             if found_road:
                 lost_timer = time.time()
+                px.set_cam_tilt_angle(0) # Center camera
+                px.set_cam_pan_angle(0)  # Center camera
+                px.set_dir_servo_angle(steering_angle)
+                print(f"Steering angle: {steering_angle:.2f}°")
+                px.forward(0.1)
             else:
                 if time.time() - lost_timer > 10:
                     music.sound_play_threading('./sounds/car-double-horn.wav')
@@ -155,4 +171,4 @@ except KeyboardInterrupt:
 finally:
     px.stop()
     picam2.stop()
-    music.sound_play_threading('./sounds/car-double-horn.wav') # TODO:FIXME: hardcoded path
+    #music.sound_play_threading('./sounds/car-double-horn.wav') # TODO:FIXME: hardcoded path

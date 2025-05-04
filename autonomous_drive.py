@@ -21,7 +21,7 @@ DIRECTION_THRESHOLD = 5       # px
 SEARCH_STEP         = 10      # degrees
 
 # PID gains
-Kp, Ki, Kd = 0.4, 0.01, 0.05
+Kp, Ki, Kd = 0.5, 0.05, 0.3
 
 # ──────────────────────────────────────────────────────────────────────────────
 # UTILS
@@ -39,8 +39,13 @@ def detect_road_contour(frame):
     mask  = cv.inRange(hsv, LOWER_BLUE, UPPER_BLUE)
 
     h, w = mask.shape
-    roi = mask[int(h*0.7):, :]   # bottom 30%
-    ox, oy = 0, int(h*0.7)
+
+    # bottom 30% of the frame, but *stop* 10% short of the absolute bottom
+    top    = int(h * 0.60)
+    bottom = int(h * 0.90)
+    roi    = mask[top:bottom, :]
+
+    ox, oy = 0, top
 
     cnts, _ = cv.findContours(roi, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
     if not cnts:
@@ -137,6 +142,8 @@ tts = TTS()
 prev_err = 0
 integral = 0
 last_dir = 0   # +1 = right, -1 = left
+last_last_dir = 0
+found_road = False
 
 lost_timer = time.time()
 hopelessly_lost = False
@@ -151,7 +158,7 @@ try:
             lost_timer = time.time()
 
             # compute lateral error
-            error   = (cX - 320) // max(80, 480 - cY)
+            error   = (cX - 320)
             integral += error
             # clamp integral to avoid windup
             integral = np.clip(integral, -SERVO_MAX, SERVO_MAX)
@@ -163,6 +170,7 @@ try:
                 raw_ang = 0
             # keep track of sign if within small dead-zone
             if abs(error) > DIRECTION_THRESHOLD:
+                last_last_dir = last_dir
                 last_dir = np.sign(error)
 
             # round & clip
@@ -183,12 +191,12 @@ try:
             found_road = False
 
             # Tilt scan: first look slightly down, then center
-            for tilt_angle in range(-SERVO_MAX, DEFAULT_TILT, 5):  # –10° then 0°
+            for tilt_angle in range(-SERVO_MAX, DEFAULT_TILT, 15):
                 px.set_cam_tilt_angle(tilt_angle)
 
                 # Build a “radial” list of pan offsets: 0, +5, –5, +10, –10, … up to SERVO_MAX
                 offsets = [0]
-                for d in range(5, SERVO_MAX + 1, 5):
+                for d in range(15, SERVO_MAX + 1, 15):
                     offsets += [d, -d]
 
                 # Center those offsets around last_pan (defaults to 0°)
@@ -211,15 +219,39 @@ try:
                     break
 
             if found_road:
-                lost_timer = time.time()
-                px.set_cam_tilt_angle(0)
-                px.set_cam_pan_angle(0)
-                px.set_dir_servo_angle(steering_angle)
-                print(f"[FOUND] pan={steering_angle:.0f}° → steering")
-                px.forward(0.1)
-                time.sleep(0.1)
+                #lost_timer = time.time()
+                #px.set_cam_tilt_angle(DEFAULT_TILT)
+                #px.set_cam_pan_angle(0)
+                #px.set_dir_servo_angle(steering_angle)
+                #print(f"[FOUND] pan={steering_angle:.0f}° → steering")
+                #last_last_dir = last_dir
+                #last_dir = np.sign(error)
+                #px.forward(0.1)
+                #time.sleep(0.1)
+                #px.stop()
+
+                # Try backing up a bit
+                steer = -last_last_dir * SERVO_MAX
+                px.set_dir_servo_angle(steer)
+                px.backward(0.1)        # back up just a bit
+                time.sleep(0.6)
                 px.stop()
+                px.set_dir_servo_angle(0)  # straighten wheels
+                continue
             else:
+                # still no road → try a little reverse-pulse in the opposite steer
+                if last_last_dir != 0:
+                    # full opposite steer
+                    steer = -last_last_dir * SERVO_MAX
+                    px.set_dir_servo_angle(steer)
+                    px.backward(0.1)        # back up just a bit
+                    time.sleep(0.6)
+                    px.stop()
+                    px.set_dir_servo_angle(0)  # straighten wheels
+                    # reset your lost timer so you don’t immediately re-enter this
+                    lost_timer = time.time()
+                    continue
+
                 # If still lost after 10 s, give up
                 if time.time() - lost_timer > 10:
                     music.sound_play_threading('./sounds/car-double-horn.wav')

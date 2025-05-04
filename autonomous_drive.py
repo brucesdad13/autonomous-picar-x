@@ -12,8 +12,8 @@ from robot_hat.utils import reset_mcu
 # ──────────────────────────────────────────────────────────────────────────────
 # CONFIGURATION
 # ──────────────────────────────────────────────────────────────────────────────
-LOWER_BLUE   = np.array([90, 50, 50])
-UPPER_BLUE   = np.array([140, 255, 255])
+LOWER_BLUE   = np.array([90, 0, 0])
+UPPER_BLUE   = np.array([180, 255, 255])
 SERVO_MAX    = 30    # servo clip in degrees
 DEFAULT_TILT = -15
 MIN_CONTOUR_AREA    = 1_000   # pixels
@@ -21,14 +21,16 @@ DIRECTION_THRESHOLD = 5       # px
 SEARCH_STEP         = 10      # degrees
 
 # PID gains
-Kp, Ki, Kd = 0.5, 0.05, 0.3
+Kp, Ki, Kd = 0.6, 0.05, 0.2
 
 # ──────────────────────────────────────────────────────────────────────────────
 # UTILS
 # ──────────────────────────────────────────────────────────────────────────────
 def grab_bgr_frame():
+    picam2.set_controls({"AwbMode":0,})
     # trigger an autofocus, then grab & convert to BGR
     picam2.set_controls({"AfMode": 2})
+    time.sleep(0.01)  # let the camera converge
     rgb = picam2.capture_array()
     return cv.cvtColor(rgb, cv.COLOR_RGB2BGR)
 
@@ -41,7 +43,7 @@ def detect_road_contour(frame):
     h, w = mask.shape
 
     # bottom 30% of the frame, but *stop* 10% short of the absolute bottom
-    top    = int(h * 0.60)
+    top    = int(h * 0.50)
     bottom = int(h * 0.90)
     roi    = mask[top:bottom, :]
 
@@ -94,7 +96,7 @@ time.sleep(0.1)
 picam2.set_controls({
     "AwbMode":          0,      # auto white balance
 })
-time.sleep(2)  # let the camera converge
+time.sleep(0.1)  # let the camera converge
 
 camera_controls = {
     "AeEnable":          1,       # 1 = on
@@ -117,18 +119,18 @@ camera_controls = {
 #    print(x)
 
 picam2.set_controls({
-    "AwbEnable":          0,       # 1 = on
+    "AwbEnable":          1,       # 1 = on
     "AwbMode":            1,       # Auto
     ##"AeEnable":           0,       # 0 = turn off auto-exposure
     "AeConstraintMode":    1,       # 0 = auto
     "AeExposureMode":       2,       # 0 = auto
-    "AnalogueGainMode":   1,       # 1 = manual gain
+    "AnalogueGainMode":   0,       # 1 = manual gain
     "AnalogueGain":       2.0,     # double the signal
     "Brightness":         0.3,       # 0 = no brightness
-    #"Contrast":           1.0,       # 0 = no contrast
-    "HdrMode":           3,       # 3 = HDR mode
+    "Contrast":           1.5,       # 0 = no contrast
+    "HdrMode":           2,       # 0 = Off, 1 = SingleExposure, 2 = MultiExposure, 3 = Night
     "NoiseReductionMode": 2,       # 0 = off
-    "Saturation":         1.0,     # 0 = no saturation
+    "Saturation":         2.0,     # 0 = no saturation
     "Sharpness":          1.0,     # 0 = no sharpness
 })
 ###
@@ -181,8 +183,23 @@ try:
             # steer & tiny forward burst
             px.set_dir_servo_angle(int(ang))
             print(f"[DRIVE] err={error:+.0f}  → PID={raw_ang:.1f}°  → steer={ang:+.0f}°")
-            px.forward(0.1)
-            time.sleep(0.1)
+
+            # pulse‐length mapping (longer when error small, very short when error large)
+            MAX_PULSE = 0.20   # maximum “straight” burst duration (s)
+            MIN_PULSE = 0.01   # minimum burst duration at max error
+            FRAME_HALF = 640//2  # frame size 640×480
+            
+            # normalize error into [0…1]
+            norm = min(abs(error) / FRAME_HALF, 1.0)
+            
+            # invert so norm=0→max pulse, norm=1→min pulse
+            pulse = MIN_PULSE + (1.0 - norm) * (MAX_PULSE - MIN_PULSE)
+
+            print(f"norm={norm:.2f}  pulse={pulse:.2f} s")
+            
+            # drive forward for that pulse
+            px.forward(0.1)      # or whatever your base speed is
+            time.sleep(pulse)
             px.stop()
 
         else:
@@ -191,7 +208,7 @@ try:
             found_road = False
 
             # Tilt scan: first look slightly down, then center
-            for tilt_angle in range(-SERVO_MAX, DEFAULT_TILT, 15):
+            for tilt_angle in range(-SERVO_MAX, DEFAULT_TILT + 1, 15):
                 px.set_cam_tilt_angle(tilt_angle)
 
                 # Build a “radial” list of pan offsets: 0, +5, –5, +10, –10, … up to SERVO_MAX
@@ -204,7 +221,7 @@ try:
                 for off in offsets:
                     pan = int(np.clip(center + off, -SERVO_MAX, SERVO_MAX))
                     px.set_cam_pan_angle(pan)
-                    time.sleep(0.3)  # give camera exposure a moment
+                    time.sleep(0.01)  # give camera exposure a moment
 
                     f, x, y = detect_road_contour(grab_bgr_frame())
                     if f is not None:
@@ -258,7 +275,7 @@ try:
                     tts.say("I am hopelessly lost. Please place me back on the road.")
                     hopelessly_lost = True
 
-        time.sleep(0.1)
+        time.sleep(0.01)
 
 except KeyboardInterrupt:
     print("Shutting down…")

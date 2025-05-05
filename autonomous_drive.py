@@ -26,8 +26,8 @@ from robot_hat.utils import reset_mcu
 
 # Tunables
 Kp, Ki, Kd = 0.6, 0.05, 0.2  # PID gains
-LOWER_BLUE = np.array([90, 0, 0])  # lower bound of blue in HSV
-UPPER_BLUE = np.array([180, 255, 255])  # upper bound of blue in HSV
+LOWER_BLUE = np.array([100, 120,  50]) # lower bound of blue in HSV
+UPPER_BLUE = np.array([180, 255, 255]) # upper bound of blue in HSV
 MAX_PULSE = 0.20  # maximum “straight” burst duration (s)
 MIN_PULSE = 0.01  # minimum burst duration at max error
 CAMERA_SETTLE_TIME = 0.01  # seconds, FIXME: impacts driving speed
@@ -68,7 +68,7 @@ def detect_road_contour(input_frame):
 
     h, _ = mask.shape
 
-    # bottom 30% of the frame, but *stop* 10% short of the absolute bottom
+    # bottom of the frame, but *stop* 10% short of the absolute bottom
     top = int(h * 0.50)
     bottom = int(h * 0.90)
     roi = mask[top:bottom, :]
@@ -123,11 +123,11 @@ picam2.set_controls(
         "AeExposureMode": 2,  # 0 = auto
         "AnalogueGainMode": 0,  # 1 = manual gain
         "AnalogueGain": 2.0,  # double the signal
-        "Brightness": 0.3,  # 0 = no brightness
-        "Contrast": 1.5,  # 0 = no contrast
-        "HdrMode": 2,  # 0 = Off, 1 = SingleExposure, 2 = MultiExposure, 3 = Night
+        "Brightness": 0.0,  # 0 = no brightness
+        "Contrast": 1.0,  # 0 = no contrast
+        "HdrMode": 0,  # 0 = Off, 1 = SingleExposure, 2 = MultiExposure, 3 = Night
         "NoiseReductionMode": 2,  # 0 = off
-        "Saturation": 2.0,  # 0 = no saturation
+        "Saturation": 1.0,  # 0 = no saturation
         "Sharpness": 1.0,  # 0 = no sharpness
     }
 )

@@ -100,6 +100,18 @@ All necessary configuration and code are included here—ready to run on any fre
 
 ---
 
+## 🔊 Sound Files
+
+The robot uses SunFounder's car engine and horn sounds during startup and lost mode. These sounds are licensed under GPLv2 and are **not included in this repository** to maintain MIT license compatibility.
+
+To download them manually:
+
+```bash
+cd sounds
+sh get_sounds.sh
+
+---
+
 ## References
 
 1. **Sunfounder.** 2023. *PiCar-X User Manual*. Available at: https://docs.sunfounder.com/projects/picar-x/en/latest/

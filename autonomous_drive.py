@@ -1,8 +1,18 @@
 #!/usr/bin/env python3
 # autonomous_drive.py
-# Author: Charles Stevenson
-# Email:  csteve17@student.fitchburgstate.edu
-# Project: PiCar-X OpenCV Autonomous Lane-Following
+#
+# MIT License
+# Copyright (c) 2025 Charles Stevenson
+# 
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
 #
 # Description:
 #   Continuously captures frames from the PiCamera2, detects a “road” marked

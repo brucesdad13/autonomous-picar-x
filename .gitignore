@@ -175,3 +175,7 @@ cython_debug/
 
 # ignore Loupe/GTD/etc. temp files
 .lgd-nfy0
+
+# ignore Sundfounder GPL licensed sound files
+sounds/car-double-horn.wav
+sounds/car-start-engine.wav

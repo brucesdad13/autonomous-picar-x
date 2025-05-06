@@ -1,6 +1,6 @@
-# PiCar-X Final Project
+# Autonomous PiCar-X: Autonomous Driving with HSV-Based Lane Detection
 
-This repository contains all configuration and notebook resources needed to reproduce my PiCar-X v2 final project on the Raspberry Pi 5.
+This repository contains all configuration and notebook resources needed to reproduce my PiCar-X v2 autonomous driving project on the Raspberry Pi 5.
 
 ---
 
@@ -49,8 +49,8 @@ This repository contains all configuration and notebook resources needed to repr
 
 1. Clone this repo:
    ```bash
-   git clone git@github.com:YourUserName/picar-x-final-project.git
-   cd picar-x-final-project
+   git clone git@github.com:brucesdad13/autonomous-picar-x.git
+   cd autonomous-picar-x
    ```
 2. Install system packages:
    ```bash

@@ -2,7 +2,7 @@
 # autonomous_drive.py
 #
 # MIT License
-# Copyright (c) 2025 Charles Stevenson
+# Copyright (c) 2025 Charles K Stevenson
 # 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal

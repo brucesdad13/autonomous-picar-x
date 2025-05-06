@@ -109,6 +109,7 @@ To download them manually:
 ```bash
 cd sounds
 sh get_sounds.sh
+```
 
 ---
 

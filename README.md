@@ -125,6 +125,8 @@ sh get_sounds.sh
 
 5. **Mueller, John Paul.** 2021. *Python All-in-One For Dummies (2nd Edition)*. Wiley. ISBN: 9781119787600. Includes chapters on OpenCV and robotics with HSV color tracking.
 
+6. **Daniel Hernandez-Vitela.** 2019. *Path Planning and Tracking for Autonomous Cars.* Available at: http://eureka-csep.cnsi.ucsb.edu/scholars/hernandez-vitela
+
 ---
 
 ## License

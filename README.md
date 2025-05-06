@@ -122,6 +122,8 @@ sh get_sounds.sh
 
 4. **OpenCV Developers.** 2019. *Changing Colorspaces*. Available at: https://docs.opencv.org/3.4/df/d9d/tutorial_py_colorspaces.html
 
+5. **Mueller, John Paul.** 2021. *Python All-in-One For Dummies (2nd Edition)*. Wiley. ISBN: 9781119787600. Includes chapters on OpenCV and robotics with HSV color tracking.
+
 ---
 
 ## License
